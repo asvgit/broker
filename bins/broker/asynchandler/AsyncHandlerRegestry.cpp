@@ -21,8 +21,8 @@
 
 namespace upmq {
 namespace broker {
-AsyncHandlerRegestry::AsyncHandlerRegestry()
-    : _size(static_cast<size_t>(NET_CONFIG.maxConnections)),
+AsyncHandlerRegestry::AsyncHandlerRegestry(const Configuration &config)
+    : _size(static_cast<size_t>(config.net().maxConnections)),
       _thread("AsyncHandlerRegestry"),
       _connections(_size),
       _isRunning(false),

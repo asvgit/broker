@@ -112,7 +112,7 @@ AsyncTCPHandler::~AsyncTCPHandler() {
     removeErrorShutdownHandler();
 
     BROKER::Instance().removeTcpConnection(_clientID, num);
-    EXCHANGE::Instance().dropOwnedDestination(_clientID);
+    BROKER::Instance().exchange().dropOwnedDestination(_clientID);
 
   } catch (std::exception &ex) {
     ASYNCLOG_ERROR(logStream, (std::to_string(num).append(" ! => ").append(std::string(ex.what()))));

@@ -26,12 +26,13 @@
 namespace upmq {
 namespace broker {
 
-Connection::Connection(const std::string &clientID)
-    : _clientID(clientID),
-      _clientIDWasSet(!clientID.empty()),
+Connection::Connection(std::string clientID, Broker &broker)
+    : _clientID(std::move(clientID)),
+      _broker(broker),
+      _clientIDWasSet(!_clientID.empty()),
       _sessions(SESSIONS_CONFIG.maxCount),
-      _sessionsT("\"" + clientID + "_sessions\""),
-      _tcpT("\"" + clientID + "_tcp_connections\"") {
+      _sessionsT("\"" + _clientID + "_sessions\""),
+      _tcpT("\"" + _clientID + "_tcp_connections\"") {
   std::stringstream sql;
   storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
   dbSession.beginTX(_clientID);
@@ -54,7 +55,7 @@ Connection::Connection(const std::string &clientID)
   CATCH_POCO_DATA_EXCEPTION("can't create connection", sql.str(), dbSession.rollbackTX(), ERROR_CONNECTION);
 
   sql.str("");
-  sql << "insert into \"" << BROKER::Instance().id() << "\" (client_id) values "
+  sql << "insert into \"" << _broker.id() << "\" (client_id) values "
       << "("
       << "\'" << _clientID << "\'"
       << ");";
@@ -69,17 +70,17 @@ Connection::~Connection() {
   }
   try {
     std::stringstream sql;
-    sql << "delete from \"" << BROKER::Instance().id() << "\" where client_id = \'" << _clientID << "\';";
-    TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+    sql << "delete from \"" << _broker.id() << "\" where client_id = \'" << _clientID << "\';";
+    TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
     CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't delete client_id", sql.str(), ERROR_CONNECTION)
 
     sql.str("");
     sql << "drop table if exists " << _sessionsT << ";";
-    TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+    TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
     CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't drop sessions", sql.str(), ERROR_CONNECTION)
     sql.str("");
     sql << "drop table if exists " << _tcpT << ";";
-    TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+    TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
     CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't drop tcp connections", sql.str(), ERROR_CONNECTION)
   } catch (...) {
   }
@@ -114,7 +115,7 @@ void Connection::addTcpConnection(size_t tcpConnectionNum) {
         << " \'" << _clientID << "\'"
         << "," << tcpConnectionNum << ")"
         << ";";
-    TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+    TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
     CATCH_POCO_DATA_EXCEPTION_PURE("can't add tcp connection", sql.str(), ERROR_CLIENT_ID_EXISTS);
     return;
   }
@@ -127,7 +128,7 @@ void Connection::removeTcpConnection(size_t tcpConnectionNum) {
     _tcpConnections.erase(it);
     std::stringstream sql;
     sql << "delete from " << _tcpT << " where tcp_id = " << tcpConnectionNum << ";";
-    TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+    TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
     CATCH_POCO_DATA_EXCEPTION_PURE_NO_INVALIDEXCEPT_NO_EXCEPT("can't remove tcp connection", sql.str(), ERROR_CONNECTION)
   }
 }
@@ -220,7 +221,7 @@ void Connection::removeConsumer(const MessageDataContainer &sMessage, size_t tcp
     }
   }
 
-  EXCHANGE::Instance().removeConsumer(sMessage, tcpNum);
+  _broker.exchange().removeConsumer(sMessage, tcpNum);
 }
 void Connection::removeConsumers(const std::string &destinationID, const std::string &subscriptionID, size_t tcpNum) {
   std::vector<std::string> ids;
@@ -228,8 +229,8 @@ void Connection::removeConsumers(const std::string &destinationID, const std::st
     ids.reserve(_sessions.size());
     _sessions.applyForEach([&ids](const SessionsList::ItemType::KVPair &pair) { ids.emplace_back(pair.second->id()); });
   }
-  std::for_each(ids.begin(), ids.end(), [&destinationID, &subscriptionID, &tcpNum](const std::string &sessionId) {
-    EXCHANGE::Instance().removeConsumer(sessionId, destinationID, subscriptionID, tcpNum);
+  std::for_each(ids.begin(), ids.end(), [this, &destinationID, &subscriptionID, &tcpNum](const std::string &sessionId) {
+    _broker.exchange().removeConsumer(sessionId, destinationID, subscriptionID, tcpNum);
   });
 }
 void Connection::processAcknowledge(const MessageDataContainer &sMessage) {
@@ -257,5 +258,6 @@ size_t Connection::tcpConnectionsCount() const {
   upmq::ScopedReadRWLock readRWLock(_tcpLock);
   return _tcpConnections.size();
 }
+Broker &Connection::broker() const { return _broker; }
 }  // namespace broker
 }  // namespace upmq

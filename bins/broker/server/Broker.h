@@ -41,6 +41,7 @@ namespace broker {
 class Connection;
 class AsyncTCPHandler;
 class Consumer;
+class Exchange;
 
 class Broker {
  public:
@@ -49,6 +50,7 @@ class Broker {
 
  private:
   std::string _id;
+  Exchange &_exchange;
   ConnectionsList _connections;
   mutable upmq::MRWLock _connectionsLock;
   std::atomic_bool _isRunning;
@@ -67,7 +69,7 @@ class Broker {
   enum { BUFFER_SIZE = 65536 };
 
  public:
-  explicit Broker(std::string id = CONFIGURATION::Instance().name());
+  explicit Broker(std::string id, Exchange &exchange);
   virtual ~Broker();
   const std::string &id() const;
   void onEvent(const AsyncTCPHandler &ahandler, MessageDataContainer &sMessage);
@@ -80,17 +82,17 @@ class Broker {
   static void onBegin(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
   static void onCommit(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
   static void onAbort(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
-  static void onMessage(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
-  static void onSender(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
+  void onMessage(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
+  void onSender(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
   static void onUnsender(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
-  static void onSubscription(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
-  static void onSubscribe(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
-  static void onUnsubscribe(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
+  void onSubscription(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
+  void onSubscribe(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
+  void onUnsubscribe(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
   static void onUnsubscription(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
   static void onAcknowledge(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
-  static void onBrowser(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
-  static void onDestination(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
-  static void onUndestination(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
+  void onBrowser(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
+  void onDestination(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
+  void onUndestination(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage);
 
   void removeTcpConnection(const std::string &clientID, size_t tcpConnectionNum);
   void removeTcpConnection(Connection &connection, size_t tcpConnectionNum);
@@ -109,6 +111,7 @@ class Broker {
   void putReadable(size_t queueNum, size_t num);
   void putWritable(size_t queueNum, size_t num);
   size_t connectionsSize() const;
+  Exchange &exchange() const;
 
  private:
   static void rwput(std::atomic_bool &isValid, BQIndexes &bqIndex, size_t num);

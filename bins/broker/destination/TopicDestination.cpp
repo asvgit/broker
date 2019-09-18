@@ -23,7 +23,7 @@
 namespace upmq {
 namespace broker {
 
-TopicDestination::TopicDestination(const Exchange &exchange, const std::string &uri, Destination::Type type) : Destination(exchange, uri, type) {
+TopicDestination::TopicDestination(Exchange &exchange, const std::string &uri, Destination::Type type) : Destination(exchange, uri, type) {
   loadDurableSubscriptions();
 }
 void TopicDestination::save(const Session &session, const MessageDataContainer &sMessage) {

@@ -41,14 +41,14 @@ Storage::Storage(const std::string &messageTableID)
   std::string mainTsql = generateSQLMainTable(messageTableID);
   auto mainTXsqlIndexes = generateSQLMainTableIndexes(messageTableID);
   TRY_POCO_DATA_EXCEPTION {
-    storage::DBMSConnectionPool::doNow(mainTsql);
+    _parent->dbms().doNow(mainTsql);
     for (const auto &index : mainTXsqlIndexes) {
-      storage::DBMSConnectionPool::doNow(index);
+      dbms::Instance().doNow(index);
     }
   }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't init storage", mainTsql, ERROR_STORAGE)
   std::string propTsql = generateSQLProperties();
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(propTsql); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(propTsql); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't init storage", mainTsql, ERROR_STORAGE)
   _nonPersistent.reserve(100);
 }
@@ -295,7 +295,7 @@ void Storage::removeMessage(const std::string &messageID, storage::DBMSSession &
   bool externConnection = extDBSession.isValid();
   std::unique_ptr<storage::DBMSSession> tempDBMSSession;
   if (!externConnection) {
-    tempDBMSSession = dbms::Instance().dbmsSessionPtr();
+    tempDBMSSession = _parent->dbms().dbmsSessionPtr();
   }
   storage::DBMSSession &dbSession = externConnection ? extDBSession : *tempDBMSSession;
   if (!externConnection) {
@@ -528,7 +528,7 @@ std::shared_ptr<MessageDataContainer> Storage::get(const Consumer &consumer, boo
     message.set_destination_uri(_parent->uri());
     message.set_priority(msg.priority);
     message.set_persistent(msg.persistent == 1);
-    message.set_sender_id(BROKER::Instance().id());
+    message.set_sender_id(CONFIGURATION::Instance().name());
     sMessage->data.clear();
     if (msg.persistent == 1) {
       std::string data = sMessage->message().message_id();
@@ -736,9 +736,9 @@ void Storage::begin(const Session &session, const std::string &extParentId) {
   std::string mainTXsql = generateSQLMainTable(mainTXTable);
   auto mainTXsqlIndexes = generateSQLMainTableIndexes(mainTXTable);
   TRY_POCO_DATA_EXCEPTION {
-    storage::DBMSConnectionPool::doNow(mainTXsql, DBMSConnectionPool::TX::NOT_USE);
+    dbms::Instance().doNow(mainTXsql, DBMSConnectionPool::TX::NOT_USE);
     for (const auto &index : mainTXsqlIndexes) {
-      storage::DBMSConnectionPool::doNow(index, DBMSConnectionPool::TX::NOT_USE);
+      dbms::Instance().doNow(index, DBMSConnectionPool::TX::NOT_USE);
     }
   }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't create tx_table", mainTXsql, ERROR_ON_BEGIN)
@@ -852,14 +852,14 @@ void Storage::setMessageToWasSent(const std::string &messageID, const Consumer &
   }
   sql << " where message_id = \'" << messageID << "\'"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), DBMSConnectionPool::TX::NOT_USE); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str(), DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't set message to was_sent ", sql.str(), ERROR_STORAGE)
 }
 void Storage::setMessageToDelivered(const std::string &messageID) {
   std::stringstream sql;
   sql << "update " << _messageTableID << " set delivery_status = " << message::DELIVERED << " where message_id = \'" << messageID << "\'"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), DBMSConnectionPool::TX::USE); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str(), DBMSConnectionPool::TX::USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't set message to delivered", sql.str(), ERROR_STORAGE)
 }
 void Storage::setMessageToLastInGroup(const Session &session, const std::string &messageID) {
@@ -898,7 +898,7 @@ void Storage::setMessagesToNotSent(const Consumer &consumer) {
     sql << " and transaction_id = \'" << consumer.session.txName << "\'";
   }
   sql << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), DBMSConnectionPool::TX::USE); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str(), DBMSConnectionPool::TX::USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE_NO_INVALIDEXCEPT_NO_EXCEPT("can't set messages to not-sent", sql.str(), ERROR_STORAGE)
 }
 void Storage::copyTo(Storage &storage, const Consumer &consumer) {
@@ -1115,17 +1115,18 @@ void Storage::fillProperties(Proto::Message &message) {
 void Storage::dropTables() {
   std::stringstream sql;
   sql << "drop table if exists " << _messageTableID << ";" << non_std_endl;
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE_NO_INVALIDEXCEPT_NO_EXCEPT("can't drop table", sql.str(), ERROR_ON_UNSUBSCRIPTION)
 
   sql.str("");
   sql << "drop table if exists " << _propertyTableID << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE_NO_INVALIDEXCEPT_NO_EXCEPT("can't drop table", sql.str(), ERROR_ON_UNSUBSCRIPTION)
 }
 bool Storage::hasTransaction(const Session &session) const {
   upmq::ScopedReadRWLock readRWLock(_txSessionsLock);
   return (_txSessions.find(session.id()) != _txSessions.end());
 }
+Proto::Destination *Storage::parent() const { return _parent; }
 }  // namespace broker
 }  // namespace upmq

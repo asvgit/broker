@@ -36,6 +36,8 @@ class Exchange {
   using DestinationsList = FSUnorderedMap<std::string, std::unique_ptr<Destination>>;
 
  private:
+  const std::string _brokerId;
+  storage::DBMSConnectionPool &_dbms;
   mutable DestinationsList _destinations;
   const std::string _destinationsT;
   std::atomic_bool _isRunning{false};
@@ -48,7 +50,7 @@ class Exchange {
   mutable BQ _destinationEvents;
 
  public:
-  Exchange();
+  Exchange(const upmq::broker::Configuration &config, storage::DBMSConnectionPool &dbms);
   virtual ~Exchange();
   Destination &destination(const std::string &uri, Exchange::DestinationCreationMode creationMode = Exchange::DestinationCreationMode::CREATE) const;
   void deleteDestination(const std::string &uri);
@@ -72,6 +74,7 @@ class Exchange {
   void postNewMessageEvent(const std::string &name) const;
   void addNewMessageEvent(const std::string &name) const;
   std::vector<Destination::Info> info() const;
+  storage::DBMSConnectionPool &dbms() const;
 
  private:
   Destination &getDestination(const std::string &id) const;

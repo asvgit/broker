@@ -24,7 +24,7 @@ namespace broker {
 
 class TemporaryTopicDestination final : public TopicDestination {
  public:
-  TemporaryTopicDestination(const Exchange &exchange, const std::string &uri);
+  TemporaryTopicDestination(Exchange &exchange, const std::string &uri);
   ~TemporaryTopicDestination() override = default;
 };
 }  // namespace broker

@@ -38,7 +38,7 @@ std::vector<std::string> split(const std::string &s, char delim) {
   return elems;
 }
 
-std::unique_ptr<Destination> DestinationFactory::createDestination(const Exchange &exchange, const std::string &uri) {
+std::unique_ptr<Destination> DestinationFactory::createDestination(Exchange &exchange, const std::string &uri) {
   switch (destinationType(uri)) {
     case Destination::Type::NONE:
       throw EXCEPTION("invalid destination uri", uri, ERROR_DESTINATION);

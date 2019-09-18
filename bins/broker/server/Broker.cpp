@@ -31,9 +31,10 @@
 namespace upmq {
 namespace broker {
 
-Broker::Broker(std::string id)
+Broker::Broker(std::string id, Exchange &exchange)
     : logStream(new ThreadSafeLogStream(ASYNCLOGGER::Instance().get(LOG_CONFIG.name))),
       _id(std::move(id)),
+      _exchange(exchange),
       _isRunning(false),
       _isReadable(false),
       _isWritable(false),
@@ -43,7 +44,7 @@ Broker::Broker(std::string id)
       _writableIndexes(THREADS_CONFIG.writers) {
   std::stringstream sql;
   sql << "drop table if exists \"" << _id << "\";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE("broker initialization error", sql.str(), ERROR_STORAGE);
   sql.str("");
   sql << "create table if not exists \"" << _id << "\" ("
@@ -51,7 +52,7 @@ Broker::Broker(std::string id)
       << ",create_time timestamp not null default current_timestamp"
       << ")"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE("broker initialization error", sql.str(), ERROR_STORAGE);
 }
 Broker::~Broker() {
@@ -161,7 +162,7 @@ void Broker::onConnect(const AsyncTCPHandler &tcpHandler, const MessageDataConta
     upmq::ScopedWriteRWLock writeRWLock(_connectionsLock);
     auto it = _connections.find(connect.client_id());
     if (it == _connections.end()) {
-      _connections.insert(std::make_pair(connect.client_id(), std::make_unique<Connection>(connect.client_id())));
+      _connections.insert(std::make_pair(connect.client_id(), std::make_unique<Connection>(connect.client_id(), *this)));
       it = _connections.find(connect.client_id());
     } else {
       if (it->second->isTcpConnectionExists(sMessage.handlerNum)) {
@@ -321,7 +322,7 @@ void Broker::onMessage(const AsyncTCPHandler &tcpHandler, const MessageDataConta
   }
 
   const Message &constMessage = sMessage.message();
-  Destination &dest = EXCHANGE::Instance().destination(constMessage.destination_uri());
+  Destination &dest = _exchange.destination(constMessage.destination_uri());
 
   if (DESTINATION_CONFIG.forwardByProperty && (constMessage.property_size() > 0)) {
     auto &msg = const_cast<MessageDataContainer &>(sMessage);
@@ -356,7 +357,7 @@ void Broker::onMessage(const AsyncTCPHandler &tcpHandler, const MessageDataConta
                             .append("] : into destination : ")
                             .append(constMessage.destination_uri())));
   tcpHandler.connection()->saveMessage(sMessage);
-  EXCHANGE::Instance().postNewMessageEvent(dest.name());
+  _exchange.postNewMessageEvent(dest.name());
 }
 void Broker::onSender(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage) {
   UNUSED_VAR(outMessage);
@@ -365,7 +366,7 @@ void Broker::onSender(const AsyncTCPHandler &tcpHandler, const MessageDataContai
     throw EXCEPTION("connection not found", sMessage.clientID, ERROR_ON_SENDER);
   }
   Destination &dest =
-      EXCHANGE::Instance().destination(sMessage.sender().destination_uri());  // NOTE: !NEED for pre-creation of destination, try to mitigate deadlock
+      _exchange.destination(sMessage.sender().destination_uri());  // NOTE: !NEED for pre-creation of destination, try to mitigate deadlock
   UNUSED_VAR(dest);
   tcpHandler.connection()->addSender(sMessage);
 }
@@ -388,8 +389,8 @@ void Broker::onSubscription(const AsyncTCPHandler &tcpHandler, const MessageData
                             .append(" : on destination [")
                             .append(sMessage.subscription().destination_uri())
                             .append("]")));
-  Destination &dest = EXCHANGE::Instance().destination(
-      sMessage.subscription().destination_uri());  // NOTE: !NEED for pre-creation of destination, try to mitigate deadlock
+  Destination &dest =
+      _exchange.destination(sMessage.subscription().destination_uri());  // NOTE: !NEED for pre-creation of destination, try to mitigate deadlock
   UNUSED_VAR(dest);
   tcpHandler.connection()->addSubscription(sMessage);
 }
@@ -401,13 +402,13 @@ void Broker::onSubscribe(const AsyncTCPHandler &tcpHandler, const MessageDataCon
   if (name.empty()) {
     throw EXCEPTION("subscription name is empty", "subscribe", ERROR_ON_SUBSCRIBE);
   }
-  EXCHANGE::Instance().destination(subscribe.destination_uri(), Exchange::DestinationCreationMode::NO_CREATE).subscribe(sMessage);
+  _exchange.destination(subscribe.destination_uri(), Exchange::DestinationCreationMode::NO_CREATE).subscribe(sMessage);
 }
 void Broker::onUnsubscribe(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage) {
   UNUSED_VAR(outMessage);
   UNUSED_VAR(tcpHandler);
   try {
-    EXCHANGE::Instance().destination(sMessage.unsubscribe().destination_uri(), Exchange::DestinationCreationMode::NO_CREATE).unsubscribe(sMessage);
+    _exchange.destination(sMessage.unsubscribe().destination_uri(), Exchange::DestinationCreationMode::NO_CREATE).unsubscribe(sMessage);
   } catch (Exception &ex) {
     if (ex.error() != ERROR_UNKNOWN) {
       throw Exception(ex);
@@ -449,14 +450,13 @@ void Broker::onBrowser(const AsyncTCPHandler &tcpHandler, const MessageDataConta
   const Proto::Browser &browser = sMessage.browser();
   const std::string &name = browser.subscription_name();
   // NOTE: do subscribe into initBrowser
-  int64_t count =
-      EXCHANGE::Instance().destination(sMessage.browser().destination_uri(), Exchange::DestinationCreationMode::NO_CREATE).initBrowser(name);
+  int64_t count = _exchange.destination(sMessage.browser().destination_uri(), Exchange::DestinationCreationMode::NO_CREATE).initBrowser(name);
   outMessage.protoMessage().mutable_browser_info()->set_message_count(count);
 }
 void Broker::onDestination(const AsyncTCPHandler &tcpHandler, const MessageDataContainer &sMessage, MessageDataContainer &outMessage) {
   UNUSED_VAR(outMessage);
   const Proto::Destination &destination = sMessage.destination();
-  auto &dest = EXCHANGE::Instance().destination(destination.destination_uri());
+  auto &dest = _exchange.destination(destination.destination_uri());
   ASYNCLOG_INFORMATION(
       tcpHandler.logStream,
       std::to_string(sMessage.handlerNum).append(" # => ").append(" create destination (").append(destination.destination_uri()).append(")"));
@@ -476,9 +476,9 @@ void Broker::onUndestination(const AsyncTCPHandler &tcpHandler, const MessageDat
   UNUSED_VAR(outMessage);
   const Proto::Undestination &undestination = sMessage.undestination();
   try {
-    auto &dest = EXCHANGE::Instance().destination(undestination.destination_uri(), Exchange::DestinationCreationMode::NO_CREATE);
+    auto &dest = _exchange.destination(undestination.destination_uri(), Exchange::DestinationCreationMode::NO_CREATE);
     if (dest.hasOwner() && (dest.owner().clientID == sMessage.clientID) && (dest.owner().tcpID == tcpHandler.num)) {
-      EXCHANGE::Instance().deleteDestination(undestination.destination_uri());
+      _exchange.deleteDestination(undestination.destination_uri());
       ASYNCLOG_INFORMATION(tcpHandler.logStream,
                            std::to_string(sMessage.handlerNum)
                                .append(" # => ")
@@ -848,6 +848,7 @@ void Broker::rwput(std::atomic_bool &isValid, BQIndexes &bqIndex, size_t num) {
     result = bqIndex.enqueue(num);
   } while (!result);
 }
+Exchange &Broker::exchange() const { return _exchange; }
 
 }  // namespace broker
 }  // namespace upmq

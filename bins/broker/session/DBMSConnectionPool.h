@@ -41,25 +41,27 @@ class DBMSConnectionPool {
   enum class TX : int { NOT_USE = 0, USE };
   enum class IN_MEMORY : int { M_YES, M_NO };
   typedef moodycamel::ConcurrentQueue<std::shared_ptr<Poco::Data::Session>> SessionsQueueType;
-  DBMSConnectionPool();
+  explicit DBMSConnectionPool(const upmq::broker::Configuration::Storage &storage = CONFIGURATION::Instance().storage());
+  DBMSConnectionPool(DBMSConnectionPool &&) = default;
   virtual ~DBMSConnectionPool();
   std::shared_ptr<Poco::Data::Session> dbmsConnection() const;
   void pushBack(std::shared_ptr<Poco::Data::Session> session);
-  static void doNow(const std::string &sql, DBMSConnectionPool::TX tx = TX::USE);
+  void doNow(const std::string &sql, DBMSConnectionPool::TX tx = TX::USE);
 
   void beginTX(Poco::Data::Session &dbSession, const std::string &txName);
-  static void commitTX(Poco::Data::Session &dbSession, const std::string &txName);
-  static void rollbackTX(Poco::Data::Session &dbSession, const std::string &txName);
+  void commitTX(Poco::Data::Session &dbSession, const std::string &txName);
+  void rollbackTX(Poco::Data::Session &dbSession, const std::string &txName);
 
   DBMSSession dbmsSession() const;
   std::unique_ptr<DBMSSession> dbmsSessionPtr() const;
+  const Configuration::Storage &storage() const;
 
  private:
-  int _count;
-  mutable SessionsQueueType _sessions;
-  std::string _dbmsString;
-  std::shared_ptr<Poco::Data::Session> _memorySession;
-  static void initDB(Poco::Data::Session &dbSessionstatic);
+  const upmq::broker::Configuration::Storage _storage;
+  mutable SessionsQueueType _sessions{};
+  std::string _dbmsString{};
+  std::shared_ptr<Poco::Data::Session> _memorySession{};
+  void initDB(Poco::Data::Session &dbSessionstatic);
   std::shared_ptr<Poco::Data::Session> makeSession(DBMSType dbmsType, const std::string &connector) const;
   IN_MEMORY _inMemory{IN_MEMORY::M_NO};
 };

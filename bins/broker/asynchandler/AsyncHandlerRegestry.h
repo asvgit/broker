@@ -25,13 +25,16 @@
 #include "MessageDataContainer.h"
 #include "Singleton.h"
 #include "BlockingConcurrentQueueHeader.h"
+
 namespace upmq {
 namespace broker {
+
+class Configuration;
 
 class AsyncHandlerRegestry : public Poco::Runnable {
  public:
   typedef std::vector<std::shared_ptr<AsyncTCPHandler>> ConnectionsListType;
-  AsyncHandlerRegestry();
+  AsyncHandlerRegestry(const Configuration& config);
   ~AsyncHandlerRegestry() override;
   void addAHandler(AsyncTCPHandler* ahandler);
   std::shared_ptr<AsyncTCPHandler> aHandler(size_t num) const;

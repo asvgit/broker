@@ -23,7 +23,7 @@
 namespace upmq {
 namespace broker {
 
-QueueDestination::QueueDestination(const Exchange &exchange, const std::string &uri, Destination::Type type) : Destination(exchange, uri, type) {}
+QueueDestination::QueueDestination(Exchange &exchange, const std::string &uri, Destination::Type type) : Destination(exchange, uri, type) {}
 QueueDestination::~QueueDestination() {}
 void QueueDestination::save(const Session &session, const MessageDataContainer &sMessage) {
   _senders.fixMessageInGroup(sMessage.message().sender_id(), session, sMessage);

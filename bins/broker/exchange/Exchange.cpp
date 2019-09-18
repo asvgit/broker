@@ -19,16 +19,17 @@
 #include <Poco/StringTokenizer.h>
 #include <sstream>
 #include <fake_cpp14.h>
-#include "Broker.h"
 #include "MiscDefines.h"
 
 namespace upmq {
 namespace broker {
 
-Exchange::Exchange()
-    : _destinations(DESTINATION_CONFIG.maxCount),
-      _destinationsT("\"" + BROKER::Instance().id() + "_destinations\""),
-      _mutexDestinations(THREADS_CONFIG.subscribers),
+Exchange::Exchange(const upmq::broker::Configuration &config, storage::DBMSConnectionPool &dbms)
+    : _brokerId(config.name()),
+      _dbms(dbms),
+      _destinations(config.destinations().maxCount),
+      _destinationsT("\"" + _brokerId + "_destinations\""),
+      _mutexDestinations(config.threads().subscribers),
       _conditionDestinations(_mutexDestinations.size()),
       _threadPool("exchange", 1, static_cast<int>(_mutexDestinations.size()) + 1) {
   std::stringstream sql;
@@ -38,19 +39,19 @@ Exchange::Exchange()
       << ",type int not null"
       << ",create_time timestamp not null default current_timestamp"
       << ",subscriptions_count int not null default 0"
-      << ",constraint \"" << BROKER::Instance().id() << "_destinations_index\" unique (name, type)"
+      << ",constraint \"" << _brokerId << "_destinations_index\" unique (name, type)"
       << ")"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { _dbms.doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't init exchange", sql.str(), ERROR_STORAGE);
   sql.str("");
-  sql << " create table if not exists " << STORAGE_CONFIG.messageJournal() << "("
+  sql << " create table if not exists " << _dbms.storage().messageJournal() << "("
       << "    message_id text not null primary key"
       << "   ,uri text not null"
       << "   ,body_type int"
       << "   ,subscribers_count int not null default 0"
       << ");";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { _dbms.doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't init exchange", sql.str(), ERROR_STORAGE);
 }
 Exchange::~Exchange() {
@@ -83,7 +84,7 @@ Destination &Exchange::destination(const std::string &uri, Exchange::Destination
       }
 
       // FIXME: if mainDP isn't uri then createDestination throw exception
-      _destinations.insert(std::make_pair(mainDP, DestinationFactory::createDestination(*this, uri)));
+      _destinations.insert(std::make_pair(mainDP, DestinationFactory::createDestination(const_cast<Exchange &>(*this), uri)));
       it.emplace(_destinations.find(mainDP).value());
 
       return *(*it.value());
@@ -107,22 +108,12 @@ std::string Exchange::mainDestinationPath(const std::string &uri) {
   return DestinationFactory::destinationTypePrefix(uri) + DestinationFactory::destinationName(uri);
 }
 void Exchange::saveMessage(const Session &session, const MessageDataContainer &sMessage) {
-  std::stringstream sql;
   const Proto::Message &message = sMessage.message();
   Destination &dest = destination(message.destination_uri(), DestinationCreationMode::NO_CREATE);
-  sql << "insert into " << STORAGE_CONFIG.messageJournal() << "("
-      << "message_id, uri, body_type, subscribers_count"
-      << ")"
-      << " values "
-      << "("
-      << " \'" << message.message_id() << "\'"
-      << ",\'" << dest.name() << "\'"
-      << "," << message.body_type() << "," << dest.subscriptionsCount() << ")"
-      << ";";
-  session.currentDBSession = dbms::Instance().dbmsSessionPtr();
+
+  session.currentDBSession = _dbms.dbmsSessionPtr();
   session.currentDBSession->beginTX(message.message_id());
-  TRY_POCO_DATA_EXCEPTION { (*session.currentDBSession) << sql.str(), Poco::Data::Keywords::now; }
-  CATCH_POCO_DATA_EXCEPTION("can't save message", sql.str(), session.currentDBSession.reset(nullptr), ERROR_ON_SAVE_MESSAGE)
+
   dest.save(session, sMessage);
 }
 const std::string &Exchange::destinationsT() const { return _destinationsT; }
@@ -179,7 +170,7 @@ void Exchange::addSubscription(const upmq::broker::Session &session, const Messa
     dest.subscription(session, sMessage);
     std::stringstream sql;
     sql << "update " << _destinationsT << " set subscriptions_count = " << dest.subscriptionsTrueCount() << ";";
-    TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+    TRY_POCO_DATA_EXCEPTION { _dbms.doNow(sql.str()); }
     CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't update subscriptions count", sql.str(), ERROR_ON_SUBSCRIPTION)
   } else {
     throw EXCEPTION("this destination was bound to another subscriber", dest.name() + " : " + sMessage.clientID, ERROR_ON_SUBSCRIPTION);
@@ -289,7 +280,7 @@ std::vector<Destination::Info> Exchange::info() const {
   });
   std::stringstream sql;
   sql << "select id, name, type, create_time from " << _destinationsT;
-  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
+  storage::DBMSSession dbSession = _dbms.dbmsSession();
   Poco::Data::Statement select(dbSession());
   Destination::Info destInfo;
   TRY_POCO_DATA_EXCEPTION {
@@ -331,5 +322,6 @@ std::vector<Destination::Info> Exchange::info() const {
 
   return infos;
 }
+storage::DBMSConnectionPool &Exchange::dbms() const { return _dbms; }
 }  // namespace broker
 }  // namespace upmq

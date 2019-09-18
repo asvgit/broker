@@ -31,6 +31,8 @@
 namespace upmq {
 namespace broker {
 
+class Broker;
+
 class Connection {
  public:
   using TCPConnectionsList = std::set<size_t>;
@@ -39,6 +41,7 @@ class Connection {
 
  private:
   std::string _clientID;
+  Broker &_broker;
   std::atomic_bool _clientIDWasSet;
   mutable TCPConnectionsList _tcpConnections;
   mutable upmq::MRWLock _tcpLock;
@@ -48,7 +51,7 @@ class Connection {
   const std::string _tcpT;
 
  public:
-  explicit Connection(const std::string &clientID);
+  Connection(std::string clientID, Broker &broker);
   virtual ~Connection();
 
   void addSession(const std::string &sessionID, Proto::Acknowledge acknowledgeType);
@@ -78,6 +81,7 @@ class Connection {
 
   int maxNotAcknowledgedMessages(size_t tcpConnectionNum) const;
   std::string transactionID(const std::string &sessionID) const;
+  Broker &broker() const;
 };
 }  // namespace broker
 }  // namespace upmq

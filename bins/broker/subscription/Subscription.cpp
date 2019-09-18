@@ -53,7 +53,7 @@ Subscription::Subscription(const Destination &destination, const std::string &id
 
   std::stringstream sql;
   sql << "drop table if exists " << _consumersT << ";" << non_std_endl;
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't init consumers table for subscription", sql.str(), ERROR_UNKNOWN)
   sql.str("");
   sql << "create table if not exists " << _consumersT << "("
@@ -67,12 +67,12 @@ Subscription::Subscription(const Destination &destination, const std::string &id
       << ",constraint \"" << _id << "_tcp_index\" unique (client_id, tcp_id, session, selector)"
       << ")"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't init destination", sql.str(), ERROR_DESTINATION)
   sql.str("");
   std::string ignorsert = "insert or ignore";
   std::string postfix;
-  if (STORAGE_CONFIG.connection.props.dbmsType == storage::Postgresql) {
+  if (_storage.parent()->dbms().storage().connection.props.dbmsType == storage::Postgresql) {
     ignorsert = "insert";
     postfix = " on conflict do nothing";
   }
@@ -88,7 +88,7 @@ Subscription::Subscription(const Destination &destination, const std::string &id
       << "," << nextParam();
   sql << "," << static_cast<int>(_type) << "," << nextParam() << ")" << postfix << ";";
 
-  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
+  storage::DBMSSession dbSession = _storage.parent()->dbms().dbmsSession();
   dbSession.beginTX(_id);
   TRY_POCO_DATA_EXCEPTION {
     dbSession << sql.str(), Poco::Data::Keywords::useRef(_name), Poco::Data::Keywords::useRef(_routingKey), Poco::Data::Keywords::now;
@@ -119,7 +119,7 @@ void Subscription::save(const Session &session, const MessageDataContainer &sMes
     if (session.isTransactAcknowledge() && !_storage.hasTransaction(session)) {
       _storage.begin(session);
     }
-    session.currentDBSession = dbms::Instance().dbmsSessionPtr();
+    session.currentDBSession = _storage.parent()->dbms().dbmsSessionPtr();
     _senders.fixMessageInGroup(message.sender_id(), session, sMessage);
 
     auto dbSession = session.currentDBSession.move();
@@ -150,7 +150,7 @@ void Subscription::addClient(
   if (isBrowser()) {
     clientID.append("-browser");
   }
-  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
+  storage::DBMSSession dbSession = _storage.parent()->dbms().dbmsSession();
   if (!selector.empty()) {
     sql << "select count(*) from " << _consumersT << " where "
         << " client_id = \'" << clientID << "\'"
@@ -354,7 +354,7 @@ Subscription::ProcessMessageResult Subscription::getNextMessage() {
         storage.setMessageToWasSent(messageID, *consumer);
         _destination.decreesNotAcknowledged(consumer->objectID);
         if (consumer->session.type == Proto::Acknowledge::CLIENT_ACKNOWLEDGE || !consumer->select->empty()) {
-          EXCHANGE::Instance().addNewMessageEvent(_destination.name());
+          _destination.exchange().addNewMessageEvent(_destination.name());
         }
         if (_destination.isQueueFamily() && _destination.consumerMode() == ConsumerMode::ROUND_ROBIN) {
           for (const auto &cn : _consumers) {
@@ -435,7 +435,7 @@ const Consumer &Subscription::byClientAndHandlerAndSessionIDs(const std::string 
 Subscription::ConsumersListType::iterator Subscription::eraseConsumer(ConsumersListType::iterator it) {
   std::stringstream sql;
   sql << "delete from " << _consumersT << " where object_id = \'" << it->second.objectID << "\';";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE_NO_INVALIDEXCEPT_NO_EXCEPT("can't remove consumer", sql.str(), ERROR_ON_UNSUBSCRIPTION)
   _destination.remFromNotAck(it->second.objectID);
   return _consumers.erase(it);
@@ -500,17 +500,17 @@ void Subscription::destroy() {
 
   std::stringstream sql;
   sql << "drop table if exists " << _consumersT << ";" << non_std_endl;
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE_NO_INVALIDEXCEPT_NO_EXCEPT("can't erase subscription", sql.str(), ERROR_ON_UNSUBSCRIPTION)
   if (!isDurable()) {
     sql.str("");
     sql << "delete from " << _destination.subscriptionsT() << " where id = \'" << _id << "\';";
-    TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+    TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str()); }
     CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't erase subscription", sql.str(), ERROR_ON_UNSUBSCRIPTION)
 
     sql.str("");
-    sql << "update " << EXCHANGE::Instance().destinationsT() << " set subscriptions_count = " << _destination.subscriptionsTrueCount();
-    TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+    sql << "update " << _destination.exchange().destinationsT() << " set subscriptions_count = " << _destination.subscriptionsTrueCount();
+    TRY_POCO_DATA_EXCEPTION { _destination.exchange().dbms().doNow(sql.str()); }
     CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't update subscriptions count", sql.str(), ERROR_ON_UNSUBSCRIPTION)
   }
   _isDestroyed = true;

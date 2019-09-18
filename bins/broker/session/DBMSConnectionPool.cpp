@@ -48,14 +48,14 @@ namespace upmq {
 namespace broker {
 namespace storage {
 
-DBMSConnectionPool::DBMSConnectionPool()
-    : _count(STORAGE_CONFIG.connection.props.connectionPool), _dbmsString(STORAGE_CONFIG.connection.value.get()) {
+DBMSConnectionPool::DBMSConnectionPool(const upmq::broker::Configuration::Storage &storage)
+    : _storage(storage), _dbmsString(_storage.connection.value.get()) {
   TRY_POCO_DATA_EXCEPTION {
     std::string connector;
-    DBMSType dbmsType = STORAGE_CONFIG.connection.props.dbmsType;
+    DBMSType dbmsType = _storage.connection.props.dbmsType;
     if (dbmsType == storage::SQLiteNative) {
-      if (STORAGE_CONFIG.connection.value.usePath && _dbmsString.find(":memory:") == std::string::npos) {
-        Poco::Path dbmsFilePath = STORAGE_CONFIG.connection.path;
+      if (_storage.connection.value.usePath && _dbmsString.find(":memory:") == std::string::npos) {
+        Poco::Path dbmsFilePath = _storage.connection.path;
         Poco::File dbmsFile(dbmsFilePath);
         if (!dbmsFile.exists()) {
           dbmsFile.createDirectories();
@@ -77,11 +77,10 @@ DBMSConnectionPool::DBMSConnectionPool()
     }
     if (_dbmsString == ":memory:") {
       _inMemory = IN_MEMORY::M_YES;
-      _count = 1;
       _memorySession = makeSession(dbmsType, connector);
       initDB(*_memorySession);
     } else {
-      for (int i = 0; i < _count; i++) {
+      for (int i = 0; i < _storage.connection.props.connectionPool; i++) {
         std::shared_ptr<Poco::Data::Session> session = makeSession(dbmsType, connector);
         if (i == 0) {
           initDB(*session);
@@ -121,9 +120,9 @@ void DBMSConnectionPool::pushBack(std::shared_ptr<Poco::Data::Session> session) 
 }
 
 void DBMSConnectionPool::beginTX(Poco::Data::Session &dbSession, const std::string &txName) {
-  if ((STORAGE_CONFIG.connection.props.dbmsType != storage::SQLiteNative) && (STORAGE_CONFIG.connection.props.dbmsType != storage::SQLite)
+  if ((_storage.connection.props.dbmsType != storage::SQLiteNative) && (_storage.connection.props.dbmsType != storage::SQLite)
 #ifdef HAS_POSTGRESQL
-      && (STORAGE_CONFIG.connection.props.dbmsType != storage::Postgresql))
+      && (_storage.connection.props.dbmsType != storage::Postgresql))
 #else
   )
 #endif  // HAS_POSTGRESQL
@@ -131,7 +130,7 @@ void DBMSConnectionPool::beginTX(Poco::Data::Session &dbSession, const std::stri
     dbSession.begin();
   }
 #ifdef HAS_POSTGRESQL
-  else if (STORAGE_CONFIG.connection.props.dbmsType == storage::Postgresql) {
+  else if (_storage.connection.props.dbmsType == storage::Postgresql) {
     //    dbSession.setFeature("autoCommit", false);
     dbSession << "BEGIN TRANSACTION;", Poco::Data::Keywords::now;
   }
@@ -146,7 +145,7 @@ void DBMSConnectionPool::beginTX(Poco::Data::Session &dbSession, const std::stri
     do {
       locked = false;
       try {
-        if (STORAGE_CONFIG.connection.props.dbmsType == storage::SQLite) {
+        if (_storage.connection.props.dbmsType == storage::SQLite) {
           dbSession.setFeature("autoCommit", false);
         }
         dbSession << sql.str(), Poco::Data::Keywords::now;
@@ -166,9 +165,9 @@ void DBMSConnectionPool::beginTX(Poco::Data::Session &dbSession, const std::stri
   }
 }
 void DBMSConnectionPool::commitTX(Poco::Data::Session &dbSession, const std::string &txName) {
-  if ((STORAGE_CONFIG.connection.props.dbmsType != storage::SQLiteNative) && (STORAGE_CONFIG.connection.props.dbmsType != storage::SQLite)
+  if ((_storage.connection.props.dbmsType != storage::SQLiteNative) && (_storage.connection.props.dbmsType != storage::SQLite)
 #ifdef HAS_POSTGRESQL
-      && (STORAGE_CONFIG.connection.props.dbmsType != storage::Postgresql))
+      && (_storage.connection.props.dbmsType != storage::Postgresql))
 #else
   )
 #endif  // HAS_POSTGRESQL
@@ -176,7 +175,7 @@ void DBMSConnectionPool::commitTX(Poco::Data::Session &dbSession, const std::str
     dbSession.commit();
   }
 #ifdef HAS_POSTGRESQL
-  else if (STORAGE_CONFIG.connection.props.dbmsType == storage::Postgresql) {
+  else if (_storage.connection.props.dbmsType == storage::Postgresql) {
     dbSession << "COMMIT;", Poco::Data::Keywords::now;
     //    dbSession.setFeature("autoCommit", true);
   }
@@ -189,7 +188,7 @@ void DBMSConnectionPool::commitTX(Poco::Data::Session &dbSession, const std::str
       locked = false;
       try {
         dbSession << sql.str(), Poco::Data::Keywords::now;
-        if (STORAGE_CONFIG.connection.props.dbmsType == storage::SQLite) {
+        if (_storage.connection.props.dbmsType == storage::SQLite) {
           dbSession.setFeature("autoCommit", true);
         }
       } catch (PDSQLITE::DBLockedException &) {
@@ -208,9 +207,9 @@ void DBMSConnectionPool::commitTX(Poco::Data::Session &dbSession, const std::str
   }
 }
 void DBMSConnectionPool::rollbackTX(Poco::Data::Session &dbSession, const std::string &txName) {
-  if ((STORAGE_CONFIG.connection.props.dbmsType != storage::SQLiteNative) && (STORAGE_CONFIG.connection.props.dbmsType != storage::SQLite)
+  if ((_storage.connection.props.dbmsType != storage::SQLiteNative) && (_storage.connection.props.dbmsType != storage::SQLite)
 #ifdef HAS_POSTGRESQL
-      && (STORAGE_CONFIG.connection.props.dbmsType != storage::Postgresql))
+      && (_storage.connection.props.dbmsType != storage::Postgresql))
 #else
   )
 #endif  // HAS_POSTGRESQL
@@ -218,7 +217,7 @@ void DBMSConnectionPool::rollbackTX(Poco::Data::Session &dbSession, const std::s
     dbSession.rollback();
   }
 #ifdef HAS_POSTGRESQL
-  else if (STORAGE_CONFIG.connection.props.dbmsType == storage::Postgresql) {
+  else if (_storage.connection.props.dbmsType == storage::Postgresql) {
     dbSession << "ROLLBACK;", Poco::Data::Keywords::now;
     //    dbSession.setFeature("autoCommit", true);
   }
@@ -231,7 +230,7 @@ void DBMSConnectionPool::rollbackTX(Poco::Data::Session &dbSession, const std::s
       locked = false;
       try {
         dbSession << sql.str(), Poco::Data::Keywords::now;
-        if (STORAGE_CONFIG.connection.props.dbmsType == storage::SQLite) {
+        if (_storage.connection.props.dbmsType == storage::SQLite) {
           dbSession.setFeature("autoCommit", true);
         }
       } catch (PDSQLITE::DBLockedException &) {
@@ -250,7 +249,7 @@ void DBMSConnectionPool::rollbackTX(Poco::Data::Session &dbSession, const std::s
   }
 }
 void DBMSConnectionPool::doNow(const std::string &sql, DBMSConnectionPool::TX tx) {
-  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
+  storage::DBMSSession dbSession = dbmsSession();
   std::string txName;
   if (tx == TX::USE) {
     txName = std::to_string((size_t)(Poco::Thread::currentTid()));
@@ -276,7 +275,7 @@ void DBMSConnectionPool::doNow(const std::string &sql, DBMSConnectionPool::TX tx
   }
 }
 void DBMSConnectionPool::initDB(Poco::Data::Session &dbSession) {
-  switch (STORAGE_CONFIG.connection.props.dbmsType) {
+  switch (_storage.connection.props.dbmsType) {
     case NO_TYPE:
       break;
     case Postgresql:
@@ -303,8 +302,8 @@ std::shared_ptr<Poco::Data::Session> DBMSConnectionPool::makeSession(DBMSType db
       session->setTransactionIsolation(Poco::Data::Session::TRANSACTION_SERIALIZABLE);
     }
     *session << "PRAGMA case_sensitive_like = True;", Poco::Data::Keywords::now;
-    *session << "PRAGMA synchronous = " << (STORAGE_CONFIG.connection.props.useSync ? "ON" : "OFF") << ";", Poco::Data::Keywords::now;
-    *session << "PRAGMA journal_mode = " << STORAGE_CONFIG.connection.props.journalMode << " ;", Poco::Data::Keywords::now;
+    *session << "PRAGMA synchronous = " << (_storage.connection.props.useSync ? "ON" : "OFF") << ";", Poco::Data::Keywords::now;
+    *session << "PRAGMA journal_mode = " << _storage.connection.props.journalMode << " ;", Poco::Data::Keywords::now;
     *session << "PRAGMA secure_delete = FALSE;", Poco::Data::Keywords::now;
   }
   return session;
@@ -314,6 +313,8 @@ DBMSSession DBMSConnectionPool::dbmsSession() const { return DBMSSession(dbmsCon
 std::unique_ptr<DBMSSession> DBMSConnectionPool::dbmsSessionPtr() const {
   return std::make_unique<DBMSSession>(dbmsConnection(), const_cast<DBMSConnectionPool &>(*this));
 }
+// FIXME : rename storage to storageConfig
+const Configuration::Storage &DBMSConnectionPool::storage() const { return _storage; }
 }  // namespace storage
 }  // namespace broker
 }  // namespace upmq

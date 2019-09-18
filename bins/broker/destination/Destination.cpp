@@ -28,10 +28,17 @@
 namespace upmq {
 namespace broker {
 
-Destination::Destination(const Exchange &exchange, const std::string &uri, Type type)
+static Configuration::Storage makeStorageForDestination(const std::string &destId, const Configuration::Storage &storage) {
+  Configuration::Storage result(storage);
+  result.connection.value.set(destId + ".db");
+  return result;
+}
+
+Destination::Destination(Exchange &exchange, const std::string &uri, Type type)
     : _id(getStoredDestinationID(exchange, Exchange::mainDestinationPath(uri), type)),
       _uri(uri),
       _name(Exchange::mainDestinationPath(uri)),
+      _dbms(makeStorageForDestination(_id, exchange.dbms().storage())),
       _subscriptions(SUBSCRIPTIONS_CONFIG.maxCount),
       _storage(_id),
       _type(type),
@@ -39,7 +46,7 @@ Destination::Destination(const Exchange &exchange, const std::string &uri, Type 
       _subscriptionsT("\"" + _id + "_subscriptions\""),
       _consumerMode(makeConsumerMode(_uri)) {
   _storage.setParent(this);
-  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
+  storage::DBMSSession dbSession = _dbms.dbmsSession();
   dbSession.beginTX(_id);
 
   createSubscriptionsTable(dbSession);
@@ -53,7 +60,7 @@ Destination::~Destination() {
       sql << "update " << _exchange.destinationsT() << " set subscriptions_count = 0"
           << " where id = \'" << _id << "\'"
           << ";";
-      TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+      TRY_POCO_DATA_EXCEPTION { _exchange.dbms().doNow(sql.str()); }
       CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't update subscription count", sql.str(), ERROR_UNKNOWN)
     }
     {
@@ -64,12 +71,12 @@ Destination::~Destination() {
     }
     if (isTemporary()) {
       sql << "drop table if exists " << _subscriptionsT << ";" << non_std_endl;
-      TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+      TRY_POCO_DATA_EXCEPTION { _exchange.dbms().doNow(sql.str()); }
       CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't update subscription count", sql.str(), ERROR_UNKNOWN)
       sql.str("");
       sql << "delete from " << _exchange.destinationsT() << " where id = \'" << _id << "\'"
           << ";";
-      TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+      TRY_POCO_DATA_EXCEPTION { _exchange.dbms().doNow(sql.str()); }
       CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't update subscription count", sql.str(), ERROR_UNKNOWN)
       _storage.dropTables();
     }
@@ -91,9 +98,9 @@ void Destination::createSubscriptionsTable(storage::DBMSSession &dbSession) {
   TRY_POCO_DATA_EXCEPTION { dbSession << sql.str(), Poco::Data::Keywords::now; }
   CATCH_POCO_DATA_EXCEPTION("can't init destination", sql.str(), dbSession.close();, ERROR_DESTINATION)
 }
-std::string Destination::getStoredDestinationID(const Exchange &exchange, const std::string &name, Destination::Type type) {
+std::string Destination::getStoredDestinationID(Exchange &exchange, const std::string &name, Destination::Type type) {
   std::string id = Poco::UUIDGenerator::defaultGenerator().createRandom().toString();
-  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
+  storage::DBMSSession dbSession = exchange.dbms().dbmsSession();
   dbSession.beginTX(id);
 
   NextBindParam nextParam;
@@ -281,8 +288,19 @@ std::string Destination::routingKey(const std::string &uri) {
   return routingKey;
 }
 void Destination::save(const Session &session, const MessageDataContainer &sMessage) {
-  UNUSED_VAR(session);
-  UNUSED_VAR(sMessage);
+  const Proto::Message &message = sMessage.message();
+  std::stringstream sql;
+  sql << "insert into " << _dbms.storage().messageJournal() << "("
+      << "message_id, uri, body_type, subscribers_count"
+      << ")"
+      << " values "
+      << "("
+      << " \'" << message.message_id() << "\'"
+      << ",\'" << _name << "\'"
+      << "," << message.body_type() << "," << subscriptionsCount() << ")"
+      << ";";
+  TRY_POCO_DATA_EXCEPTION { (*session.currentDBSession) << sql.str(), Poco::Data::Keywords::now; }
+  CATCH_POCO_DATA_EXCEPTION("can't save message", sql.str(), session.currentDBSession.reset(nullptr), ERROR_ON_SAVE_MESSAGE)
 }
 void Destination::ack(const Session &session, const MessageDataContainer &sMessage) {
   UNUSED_VAR(session);
@@ -341,7 +359,7 @@ void Destination::removeMessageOrGroup(const Session &session, Storage &storage,
   }
 
   if (session.currentDBSession == nullptr) {
-    storage::DBMSSession dbmsSession = dbms::Instance().dbmsSession();
+    storage::DBMSSession dbmsSession = _dbms.dbmsSession();
     storage.removeMessage(msg.tuple.get<message::field_message_id.position>(), dbmsSession);
   } else {
     storage.removeMessage(msg.tuple.get<message::field_message_id.position>(), *session.currentDBSession);
@@ -422,7 +440,7 @@ void Destination::remFromNotAck(const std::string &objectID) const {
 void Destination::postNewMessageEvent() const {
   const size_t subsCnt = isTopicFamily() ? subscriptionsTrueCount() : 1;
   for (size_t i = 0; i < subsCnt; ++i) {
-    EXCHANGE::Instance().postNewMessageEvent(name());
+    _exchange.postNewMessageEvent(name());
   }
 }
 bool Destination::removeConsumer(const std::string &sessionID, const std::string &subscriptionID, size_t tcpNum) {
@@ -519,7 +537,7 @@ void Destination::loadDurableSubscriptions() {
   sql << "select "
       << "id, name, routing_key"
       << " from " << subscriptionsT() << " where type = " << type << ";";
-  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
+  storage::DBMSSession dbSession = _dbms.dbmsSession();
   TRY_POCO_DATA_EXCEPTION {
     Poco::Data::Statement select(dbSession());
     select << sql.str(), Poco::Data::Keywords::into(id), Poco::Data::Keywords::into(name), Poco::Data::Keywords::into(routingKey),
@@ -632,5 +650,7 @@ Destination::Type Destination::type(const std::string &typeName) {
   }
   return Destination::Type::NONE;
 }
+Exchange &Destination::exchange() const { return _exchange; }
+storage::DBMSConnectionPool &Destination::dbms() const { return _dbms; }
 }  // namespace broker
 }  // namespace upmq

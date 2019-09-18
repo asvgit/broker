@@ -26,7 +26,7 @@ namespace upmq {
 namespace broker {
 class DestinationFactory {
  public:
-  static std::unique_ptr<Destination> createDestination(const Exchange &exchange, const std::string &uri);
+  static std::unique_ptr<Destination> createDestination(Exchange &exchange, const std::string &uri);
   static Destination::Type destinationType(const std::string &uri);
   static std::string destinationTypePrefix(const std::string &uri);
   static std::string destinationName(const std::string &uri);

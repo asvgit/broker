@@ -27,7 +27,7 @@ class QueueDestination : public Destination {
   SenderList _senders;
 
  public:
-  QueueDestination(const Exchange &exchange, const std::string &uri, Destination::Type type = Destination::Type::QUEUE);
+  QueueDestination(Exchange &exchange, const std::string &uri, Destination::Type type = Destination::Type::QUEUE);
   ~QueueDestination() override;
   void save(const Session &session, const MessageDataContainer &sMessage) override;
   void ack(const Session &session, const MessageDataContainer &sMessage) override;

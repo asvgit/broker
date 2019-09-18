@@ -22,7 +22,7 @@ class Singleton {
  public:
   static T &Instance() {
     if (Singleton::_instance == nullptr) {
-      Singleton<T>::_instance = CreateInstance();
+      throw std::runtime_error("singleton instance is null");
     }
     return *(Singleton<T>::_instance);
   }
@@ -30,6 +30,14 @@ class Singleton {
   static void destroyInstance() {
     delete Singleton<T>::_instance;
     Singleton::_instance = nullptr;
+  }
+
+  template <typename... Args>
+  static void makeInstance(Args &&... args) {
+    if (Singleton::_instance != nullptr) {
+      destroyInstance();
+    }
+    Singleton::_instance = new T(std::forward<Args>(args)...);
   }
 
  protected:
@@ -46,7 +54,10 @@ class Singleton {
 
  private:
   static T *_instance;
-  static T *CreateInstance() { return new T(); }
+  template <typename... Args>
+  static T *CreateInstance(Args &&... args) {
+    return new T(std::forward<Args>(args)...);
+  }
 };
 
 template <typename T>

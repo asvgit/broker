@@ -19,6 +19,7 @@
 #include "Defines.h"
 #include "Exchange.h"
 #include "MiscDefines.h"
+#include "Broker.h"
 
 namespace upmq {
 namespace broker {
@@ -38,7 +39,7 @@ Session::Session(const Connection &connection, std::string id, Proto::Acknowledg
       << "\'" << _id << "\'"
       << "," << _acknowledgeType << ")"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't create session", sql.str(), ERROR_ON_SESSION);
 }
 Session::~Session() {
@@ -57,16 +58,16 @@ Session::~Session() {
 }
 void Session::removeSenders() const {
   try {
-    EXCHANGE::Instance().removeSenders(*this);
+    _connection.broker().exchange().removeSenders(*this);
   } catch (...) {  // -V565
   }
 }
 void Session::dropTemporaryDestination() const {
   for (const auto &destination : _destinations) {
     try {
-      if (EXCHANGE::Instance().isDestinationTemporary(destination)) {
+      if (_connection.broker().exchange().isDestinationTemporary(destination)) {
         DestinationOwner destinationOwner(_connection.clientID(), 0);
-        EXCHANGE::Instance().dropDestination(destination, &destinationOwner);
+        _connection.broker().exchange().dropDestination(destination, &destinationOwner);
       }
     } catch (...) {  // -V565
     }
@@ -75,7 +76,7 @@ void Session::dropTemporaryDestination() const {
 void Session::deleteFromConnectionTable() const {
   std::stringstream sql;
   sql << "delete from " << _connection.sessionsT() << " where id = \'" << _id << "\';";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
   CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't delete from session table", sql.str(), ERROR_ON_UNSESSION)
 }
 std::string Session::acknowlegeName(Proto::Acknowledge acknowledgeType) {
@@ -111,7 +112,7 @@ void Session::addToUsed(const std::string &uri) {
   if (it == _destinations.end()) {
     _destinations.insert(destName);
     if (isTransactAcknowledge()) {
-      EXCHANGE::Instance().begin(*this, uri);
+      _connection.broker().exchange().begin(*this, uri);
     }
   }
 }
@@ -133,7 +134,7 @@ void Session::begin() const {
 void Session::rebegin() const {
   begin();
   for (const auto &item : _destinations) {
-    EXCHANGE::Instance().begin(*this, item);
+    _connection.broker().exchange().begin(*this, item);
   }
 }
 void Session::commit() const {
@@ -141,7 +142,7 @@ void Session::commit() const {
     return;
   }
   for (const auto &item : _destinations) {
-    EXCHANGE::Instance().commit(*this, item);
+    _connection.broker().exchange().commit(*this, item);
   }
   _stateStack.push(State::COMMIT);
   rebegin();
@@ -151,7 +152,7 @@ void Session::abort(bool destruct) const {
     return;
   }
   for (const auto &item : _destinations) {
-    EXCHANGE::Instance().abort(*this, item);
+    _connection.broker().exchange().abort(*this, item);
   }
   _stateStack.push(State::ABORT);
   if (!destruct) {
@@ -160,22 +161,24 @@ void Session::abort(bool destruct) const {
 }
 void Session::saveMessage(const MessageDataContainer &sMessage) {
   addToUsed(sMessage.message().destination_uri());
-  EXCHANGE::Instance().saveMessage(*this, sMessage);
+  _connection.broker().exchange().saveMessage(*this, sMessage);
 }
 std::string Session::txName() const { return _id + "_" + std::to_string(_txCounter); }
 void Session::addSender(const MessageDataContainer &sMessage) {
   addToUsed(sMessage.sender().destination_uri());
-  EXCHANGE::Instance().addSender(*this, sMessage);
+  _connection.broker().exchange().addSender(*this, sMessage);
 }
-void Session::removeSender(const MessageDataContainer &sMessage) { EXCHANGE::Instance().removeSender(*this, sMessage); }
+void Session::removeSender(const MessageDataContainer &sMessage) { _connection.broker().exchange().removeSender(*this, sMessage); }
 void Session::addSubscription(const MessageDataContainer &sMessage) {
   const Proto::Subscription &subscription = sMessage.subscription();
-  EXCHANGE::Instance().addSubscription(*this, sMessage);
+  _connection.broker().exchange().addSubscription(*this, sMessage);
   addToUsed(subscription.destination_uri());
 }
-void Session::removeConsumer(const MessageDataContainer &sMessage, size_t tcpNum) { EXCHANGE::Instance().removeConsumer(sMessage, tcpNum); }
+void Session::removeConsumer(const MessageDataContainer &sMessage, size_t tcpNum) {
+  _connection.broker().exchange().removeConsumer(sMessage, tcpNum);
+}
 void Session::removeConsumers(const std::string &destinationID, const std::string &subscriptionID, size_t tcpNum) {
-  EXCHANGE::Instance().removeConsumer(_id, destinationID, subscriptionID, tcpNum);
+  _connection.broker().exchange().removeConsumer(_id, destinationID, subscriptionID, tcpNum);
 }
 const CircularQueue<Session::State> &Session::stateStack() const { return _stateStack; }
 const Connection &Session::connection() const { return _connection; }
@@ -190,7 +193,7 @@ void Session::processAcknowledge(const MessageDataContainer &sMessage) {
       upmq::ScopedReadRWLock rlock(_destinationsLock);
       for (const auto &destination : _destinations) {
         try {
-          EXCHANGE::Instance().destination(destination, Exchange::DestinationCreationMode::NO_CREATE).ack(*this, sMessage);
+          _connection.broker().exchange().destination(destination, Exchange::DestinationCreationMode::NO_CREATE).ack(*this, sMessage);
         } catch (Exception &ex) {
           if (ex.error() == ERROR_UNKNOWN) {
             toerase.emplace_back(destination);
@@ -204,14 +207,14 @@ void Session::processAcknowledge(const MessageDataContainer &sMessage) {
       removeFromUsed(item);
     }
   } else {
-    EXCHANGE::Instance().destination(ack.destination_uri(), Exchange::DestinationCreationMode::NO_CREATE).ack(*this, sMessage);
+    _connection.broker().exchange().destination(ack.destination_uri(), Exchange::DestinationCreationMode::NO_CREATE).ack(*this, sMessage);
   }
 }
 void Session::closeSubscriptions(size_t tcpNum) {
   upmq::ScopedReadRWLock readRWLock(_destinationsLock);
   for (const auto &destination : _destinations) {
     try {
-      EXCHANGE::Instance().destination(destination, Exchange::DestinationCreationMode::NO_CREATE).closeAllSubscriptions(*this, tcpNum);
+      _connection.broker().exchange().destination(destination, Exchange::DestinationCreationMode::NO_CREATE).closeAllSubscriptions(*this, tcpNum);
     } catch (Exception &ex) {
       if ((ex.error() != ERROR_UNKNOWN) || (ex.message().find("destination not found") == std::string::npos)) {
         throw Exception(ex);

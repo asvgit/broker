@@ -27,7 +27,7 @@ class TopicDestination : public Destination {
   using SenderCache = std::unordered_multimap<std::string, std::string>;
   /// @brief ParentTopics - vector<routingKey>
   using ParentTopics = std::vector<std::string>;
-  TopicDestination(const Exchange &exchange, const std::string &uri, Destination::Type type = Destination::Type::TOPIC);
+  TopicDestination(Exchange &exchange, const std::string &uri, Destination::Type type = Destination::Type::TOPIC);
   ~TopicDestination() override = default;
   void save(const Session &session, const MessageDataContainer &sMessage) override;
   void ack(const Session &session, const MessageDataContainer &sMessage) override;

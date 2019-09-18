@@ -81,12 +81,13 @@ class Destination {
   std::string _id;
   std::string _uri;
   std::string _name;
+  upmq::broker::storage::DBMSConnectionPool _dbms;
   SubscriptionsList _subscriptions;
   mutable Storage _storage;
   Type _type;
   mutable upmq::MRWLock _routingLock;
   mutable RoutingList _routing;
-  const Exchange &_exchange;
+  Exchange &_exchange;
   std::string _subscriptionsT;
   mutable NotAckConsumersInfoList _notAckList;
   mutable upmq::MRWLock _notAckLock;
@@ -104,12 +105,12 @@ class Destination {
   void addS2Subs(const std::string &sesionID, const std::string &subsID);
   void remS2Subs(const std::string &sessionID, const std::string &subsID);
   void createSubscriptionsTable(storage::DBMSSession &dbSession);
-  static std::string getStoredDestinationID(const Exchange &exchange, const std::string &name, Destination::Type type);
+  static std::string getStoredDestinationID(Exchange &exchange, const std::string &name, Destination::Type type);
   static void saveDestinationId(
       const std::string &id, storage::DBMSSession &dbSession, const Exchange &exchange, const std::string &name, Destination::Type type);
 
  public:
-  Destination(const Exchange &exchange, const std::string &uri, Type type);
+  Destination(Exchange &exchange, const std::string &uri, Type type);
   virtual ~Destination();
   Destination(const Destination &o) = delete;
   Destination &operator=(const Destination &o) = delete;
@@ -180,6 +181,8 @@ class Destination {
   Info info() const;
   static std::string typeName(Type type);
   static Destination::Type type(const std::string &typeName);
+  Exchange &exchange() const;
+  storage::DBMSConnectionPool &dbms() const;
 
  protected:
   void loadDurableSubscriptions();

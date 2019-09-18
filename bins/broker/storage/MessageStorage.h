@@ -66,6 +66,7 @@ class Storage {
   Storage &operator=(Storage &&) = default;
   virtual ~Storage();
   void setParent(const broker::Destination *parent);
+  Destination *parent() const;
   const std::string &messageTableID() const;
   const std::string &propertyTableID() const;
   void save(const upmq::broker::Session &session, const MessageDataContainer &sMessage, storage::DBMSSession &dbSession);

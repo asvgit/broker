@@ -98,6 +98,7 @@ int MainApplication::main(const std::vector<std::string> &args) {
     return Application::EXIT_OK;
   }
 
+  CONFIGURATION::makeInstance();
   loadBrokerConfiguration();
 
   // TODO : wrap with macro ifdef..
@@ -109,8 +110,13 @@ int MainApplication::main(const std::vector<std::string> &args) {
   }
 
   try {
+    ASYNCLOGGER::makeInstance();
+    AHRegestry::makeInstance(CONFIGURATION::Instance());
+    upmq::broker::storage::DBMSConnectionPool mainDBMSPool(STORAGE_CONFIG);
+    EXCHANGE::makeInstance(CONFIGURATION::Instance(), mainDBMSPool);
     EXCHANGE::Instance().start();
-    BROKER::Instance().start();
+
+    BROKER::makeInstance(CONFIGURATION::Instance().name(), EXCHANGE::Instance());
   } catch (Exception &ex) {
     ASYNCLOG_CRITICAL(logStream, (ex.message()));
     return Application::EXIT_CANTCREAT;
@@ -210,6 +216,7 @@ int MainApplication::main(const std::vector<std::string> &args) {
   ASYNCLOG_CRITICAL(logStream, (std::string("-").append(" * ").append(">>========= stop =========<<")));
   logStream.reset(nullptr);
   ASYNCLOGGER::Instance().destroy(CONFIGURATION::Instance().log().name);
+  ASYNCLOGGER::destroyInstance();
   return Application::EXIT_OK;
 }
 
