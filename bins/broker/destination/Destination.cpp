@@ -46,12 +46,8 @@ Destination::Destination(Exchange &exchange, const std::string &uri, Type type)
       _subscriptionsT("\"" + _id + "_subscriptions\""),
       _consumerMode(makeConsumerMode(_uri)) {
   _storage.setParent(this);
-  storage::DBMSSession dbSession = _dbms.dbmsSession();
-  dbSession.beginTX(_id);
-
+  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
   createSubscriptionsTable(dbSession);
-
-  dbSession.commitTX();
 }
 Destination::~Destination() {
   try {

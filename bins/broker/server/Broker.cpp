@@ -44,7 +44,7 @@ Broker::Broker(std::string id, Exchange &exchange)
       _writableIndexes(THREADS_CONFIG.writers) {
   std::stringstream sql;
   sql << "drop table if exists \"" << _id << "\";";
-  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("broker initialization error", sql.str(), ERROR_STORAGE);
   sql.str("");
   sql << "create table if not exists \"" << _id << "\" ("
@@ -52,7 +52,7 @@ Broker::Broker(std::string id, Exchange &exchange)
       << ",create_time timestamp not null default current_timestamp"
       << ")"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { dbms::Instance().doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("broker initialization error", sql.str(), ERROR_STORAGE);
 }
 Broker::~Broker() {
@@ -125,6 +125,9 @@ void Broker::onEvent(const AsyncTCPHandler &ahandler, MessageDataContainer &sMes
       case ProtoMessage::kBrowser: {
         onBrowser(ahandler, sMessage, *outMessage);
       } break;
+      case ProtoMessage::kPing: {
+        outMessage->protoMessage().mutable_pong();
+      } break;
       default:
         throw EXCEPTION("unknown message type", std::to_string(static_cast<int>(sMessage.type())), ERROR_UNKNOWN);
     }
@@ -139,7 +142,7 @@ void Broker::onEvent(const AsyncTCPHandler &ahandler, MessageDataContainer &sMes
       sMessage.removeLinkedFile();
     }
   }
-  if (sMessage.isNeedReceipt() || sMessage.isConnect() || sMessage.isBrowser() || outMessage->protoMessage().has_error()) {
+  if (sMessage.isNeedReceipt() || sMessage.isConnect() || sMessage.isBrowser() || sMessage.isPing() || outMessage->protoMessage().has_error()) {
     auto &protoMessage = outMessage->protoMessage();
     if (protoMessage.has_error()) {
       protoMessage.mutable_error()->set_receipt_id(sMessage.receiptId());
@@ -746,17 +749,6 @@ bool Broker::read(size_t num) {
         sMessage.clientID = ((ahandler->connection() != nullptr) ? ahandler->connection()->clientID() : emptyString);
 
         switch (static_cast<int>(sMessage.type())) {
-          case ProtoMessage::kPing: {
-            std::shared_ptr<MessageDataContainer> dc = std::make_shared<MessageDataContainer>(new Proto::ProtoMessage());
-            dc->protoMessage().mutable_pong();
-            dc->setObjectID(sMessage.objectID());
-            dc->setRRID(sMessage.rrID());
-            dc->serialize();
-            ahandler->put(std::move(dc));
-            ahandler->onReadableLock.unlock();
-            ahandler->allowPutReadEvent();
-          }
-            return true;
           case ProtoMessage::kConnect: {
             ASYNCLOG_INFORMATION(ahandler->logStream, (std::to_string(num).append(" * ").append("=> get connect frame")));
             ahandler->storeClientInfo(sMessage);

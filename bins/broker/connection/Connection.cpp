@@ -35,7 +35,7 @@ Connection::Connection(std::string clientID, Broker &broker)
       _tcpT("\"" + _clientID + "_tcp_connections\"") {
   std::stringstream sql;
   storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
-  dbSession.beginTX(_clientID);
+
   sql << "create table if not exists " << _sessionsT << " ("
       << " id text not null primary key"
       << ",ack_type int not null"
@@ -61,7 +61,6 @@ Connection::Connection(std::string clientID, Broker &broker)
       << ");";
   TRY_POCO_DATA_EXCEPTION { dbSession << sql.str(), Poco::Data::Keywords::now; }
   CATCH_POCO_DATA_EXCEPTION("can't create connection", sql.str(), dbSession.rollbackTX(), ERROR_CONNECTION);
-  dbSession.commitTX();
 }
 Connection::~Connection() {
   try {
