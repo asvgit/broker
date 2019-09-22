@@ -42,7 +42,7 @@ Exchange::Exchange(const upmq::broker::Configuration &config, storage::DBMSConne
       << ",constraint \"" << _brokerId << "_destinations_index\" unique (name, type)"
       << ")"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
+  TRY_POCO_DATA_EXCEPTION { _dbms.doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't init exchange", sql.str(), ERROR_STORAGE);
   sql.str("");
   sql << " create table if not exists " << _dbms.storage().messageJournal() << "("
@@ -51,7 +51,7 @@ Exchange::Exchange(const upmq::broker::Configuration &config, storage::DBMSConne
       << "   ,body_type int"
       << "   ,subscribers_count int not null default 0"
       << ");";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
+  TRY_POCO_DATA_EXCEPTION { _dbms.doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't init exchange", sql.str(), ERROR_STORAGE);
 }
 Exchange::~Exchange() {

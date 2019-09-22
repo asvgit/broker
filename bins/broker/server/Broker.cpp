@@ -44,7 +44,7 @@ Broker::Broker(std::string id, Exchange &exchange)
       _writableIndexes(THREADS_CONFIG.writers) {
   std::stringstream sql;
   sql << "drop table if exists \"" << _id << "\";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
+  TRY_POCO_DATA_EXCEPTION { _exchange.dbms().doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("broker initialization error", sql.str(), ERROR_STORAGE);
   sql.str("");
   sql << "create table if not exists \"" << _id << "\" ("
@@ -52,7 +52,7 @@ Broker::Broker(std::string id, Exchange &exchange)
       << ",create_time timestamp not null default current_timestamp"
       << ")"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { storage::DBMSConnectionPool::doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
+  TRY_POCO_DATA_EXCEPTION { _exchange.dbms().doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("broker initialization error", sql.str(), ERROR_STORAGE);
 }
 Broker::~Broker() {

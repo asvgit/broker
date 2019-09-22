@@ -41,7 +41,7 @@ class Storage {
  private:
   std::string _messageTableID;
   std::string _propertyTableID;
-  const Destination *_parent;
+  Destination *_parent;
   NonPersistentMessagesListType _nonPersistent;
   mutable upmq::MRWLock _nonPersistentLock;
   std::string _extParentID;

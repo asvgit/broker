@@ -53,7 +53,7 @@ Subscription::Subscription(const Destination &destination, const std::string &id
 
   std::stringstream sql;
   sql << "drop table if exists " << _consumersT << ";" << non_std_endl;
-  TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE_NO_EXCEPT("can't init consumers table for subscription", sql.str(), ERROR_UNKNOWN)
   sql.str("");
   sql << "create table if not exists " << _consumersT << "("
@@ -67,7 +67,7 @@ Subscription::Subscription(const Destination &destination, const std::string &id
       << ",constraint \"" << _id << "_tcp_index\" unique (client_id, tcp_id, session, selector)"
       << ")"
       << ";";
-  TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str()); }
+  TRY_POCO_DATA_EXCEPTION { _storage.parent()->dbms().doNow(sql.str(), storage::DBMSConnectionPool::TX::NOT_USE); }
   CATCH_POCO_DATA_EXCEPTION_PURE("can't init destination", sql.str(), ERROR_DESTINATION)
   sql.str("");
   std::string ignorsert = "insert or ignore";

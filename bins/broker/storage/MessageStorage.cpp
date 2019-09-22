@@ -604,7 +604,7 @@ std::shared_ptr<MessageDataContainer> Storage::get(const Consumer &consumer, boo
   }
   return sMessage;
 }
-void Storage::setParent(const broker::Destination *parent) { _parent = parent; }
+void Storage::setParent(const broker::Destination *parent) { _parent = const_cast<broker::Destination *>(parent); }
 const std::string &Storage::uri() const { return _parent ? _parent->uri() : emptyString; }
 void Storage::saveMessageProperties(storage::DBMSSession &dbSession, const Message &message) {
   std::stringstream sql;
@@ -1127,6 +1127,6 @@ bool Storage::hasTransaction(const Session &session) const {
   upmq::ScopedReadRWLock readRWLock(_txSessionsLock);
   return (_txSessions.find(session.id()) != _txSessions.end());
 }
-Proto::Destination *Storage::parent() const { return _parent; }
+Destination *Storage::parent() const { return _parent; }
 }  // namespace broker
 }  // namespace upmq

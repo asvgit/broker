@@ -81,7 +81,7 @@ class Destination {
   std::string _id;
   std::string _uri;
   std::string _name;
-  upmq::broker::storage::DBMSConnectionPool _dbms;
+  mutable upmq::broker::storage::DBMSConnectionPool _dbms;
   SubscriptionsList _subscriptions;
   mutable Storage _storage;
   Type _type;
