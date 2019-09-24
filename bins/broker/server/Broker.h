@@ -34,6 +34,7 @@
 #include <Poco/Condition.h>
 #include <Poco/RWLock.h>
 #include <Poco/Thread.h>
+#include <FixedSizeUnorderedMap.h>
 
 namespace upmq {
 namespace broker {
@@ -45,14 +46,13 @@ class Exchange;
 
 class Broker {
  public:
-  using ConnectionsList = std::unordered_map<std::string, std::unique_ptr<Connection>>;
+  using ConnectionsList = FSUnorderedMap<std::string, std::unique_ptr<Connection>>;
   std::unique_ptr<ThreadSafeLogStream> logStream;
 
  private:
   std::string _id;
   Exchange &_exchange;
   ConnectionsList _connections;
-  mutable upmq::MRWLock _connectionsLock;
   std::atomic_bool _isRunning;
   std::atomic_bool _isReadable;
   std::atomic_bool _isWritable;

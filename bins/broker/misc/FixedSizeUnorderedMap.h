@@ -28,28 +28,42 @@ namespace upmq {
 
 template <typename Value>
 class FSReadLockedValue {
-  MRWLock &_rwLock;
-  const Value &_value;
+  MRWLock *_rwLock;
+  const Value *_value;
   std::atomic_bool _wasMoved{false};
 
  public:
-  FSReadLockedValue(MRWLock &mrwLock, const Value &value) : _rwLock(mrwLock), _value(value) {}
+  FSReadLockedValue(MRWLock &mrwLock, const Value &value) : _rwLock(&mrwLock), _value(&value) {}
   FSReadLockedValue(const FSReadLockedValue &) = delete;
   FSReadLockedValue(FSReadLockedValue &&o) noexcept : _rwLock(o._rwLock), _value(o._value), _wasMoved(false) { o._wasMoved = true; }
   FSReadLockedValue &operator=(const FSReadLockedValue &) = delete;
-  FSReadLockedValue &operator=(FSReadLockedValue &&) = delete;
+  FSReadLockedValue &operator=(FSReadLockedValue &&o) noexcept {
+    if (_rwLock->isValid()) {
+      try {
+        if (!_wasMoved) {
+          _rwLock->unlockRead();
+        }
+      } catch (...) {
+      }
+    }
+    _rwLock = o._rwLock;
+    _value = o._value;
+    _wasMoved = false;
+    o._wasMoved = true;
+    return *this;
+  }
   ~FSReadLockedValue() noexcept {
     try {
       if (!_wasMoved) {
-        _rwLock.unlockRead();
+        _rwLock->unlockRead();
       }
     } catch (...) {
     }
   }
-  const Value &operator*() const { return _value; }
-  const Value *operator->() const { return &_value; }
-  Value &operator*() { return const_cast<Value &>(_value); }
-  Value *operator->() { return const_cast<Value *>(&_value); }
+  const Value &operator*() const { return *_value; }
+  const Value *operator->() const { return _value; }
+  Value &operator*() { return const_cast<Value &>(*_value); }
+  Value *operator->() { return const_cast<Value *>(_value); }
 };
 template <typename Value>
 class FSWriteLockedValue {

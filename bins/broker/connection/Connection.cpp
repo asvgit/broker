@@ -34,7 +34,7 @@ Connection::Connection(std::string clientID, Broker &broker)
       _sessionsT("\"" + _clientID + "_sessions\""),
       _tcpT("\"" + _clientID + "_tcp_connections\"") {
   std::stringstream sql;
-  storage::DBMSSession dbSession = dbms::Instance().dbmsSession();
+  storage::DBMSSession dbSession = _broker.exchange().dbms().dbmsSession();
 
   sql << "create table if not exists " << _sessionsT << " ("
       << " id text not null primary key"
