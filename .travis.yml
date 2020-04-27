@@ -1,0 +1,16 @@
+dist: bionic
+
+stages:
+  - build
+
+gcc_builder:
+  stage: build
+  image: registry.gitlab.com/s.arlyapov/build_cpp
+  before_script:
+    - apt-get install -y cmake build-essential
+    - apt-get install -y libpoco-dev uuid-dev pkg-config protobuf-compiler unixodbc-dev libgtest-dev libprotobuf-dev
+  script:
+    - mkdir build
+    - cd ./build
+    - cmake ..
+    - cmkae --build .
