@@ -4,17 +4,16 @@ before_script:
   - sudo apt-get update
   - sudo apt-get install -y libpoco-dev uuid-dev pkg-config unixodbc-dev libgtest-dev build-essential libssl-dev git wget curl unzip autoconf
   - cd /usr/src/gtest
-  - cmake CMakeLists.txt
+  - sudo cmake CMakeLists.txt
   - sudo make install
   - cd /
-  - git clone https://github.com/protocolbuffers/protobuf.git
+  - sudo git clone https://github.com/protocolbuffers/protobuf.git
   - cd /protobuf
-  - git checkout v3.3.0
-  - git submodule update --init --recursive
-  - ./autogen.sh
-  - ./configure
-  - make -j2 install
-  - sudo make install
+  - sudo git checkout v3.3.0
+  - sudo git submodule update --init --recursive
+  - sudo ./autogen.sh
+  - sudo ./configure
+  - sudo make -j2 install
   - sudo apt-get install -y protobuf-compiler
 script:
   - cmake .
