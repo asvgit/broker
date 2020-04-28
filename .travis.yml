@@ -2,8 +2,19 @@ dist: bionic
 language: cpp
 before_script:
   - sudo apt-get update
-  - sudo apt-get install -y cmake build-essential
-  - sudo apt-get install -y libpoco-dev uuid-dev pkg-config protobuf-compiler unixodbc-dev libgtest-dev libprotobuf-dev
+  - sudo apt-get install -y libpoco-dev uuid-dev pkg-config unixodbc-dev libgtest-dev build-essential libssl-dev git wget curl unzip autoconf
+  - sudo cd /usr/src/gtest
+  - sudo cmake CMakeLists.txt
+  - sudo make install
+  - sudo cd /
+  - sudo git clone https://github.com/protocolbuffers/protobuf.git
+  - sudo cd /protobuf
+  - sudo git checkout v3.3.0
+  - sudo git submodule update --init --recursive
+  - sudo ./autogen.sh
+  - sudo ./configure
+  - sudo make install
+  - sudo apt-get install -y protobuf-compiler
 script:
   - cmake .
   - cmake --build .
