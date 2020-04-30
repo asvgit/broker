@@ -5,7 +5,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: pull image
+    - name: Pull docker image
       run: docker pull registry.gitlab.com/s.arlyapov/build_cpp/broker
-    - name: run from image
+    - name: Run container from image
       run: docker run -d  --name broker registry.gitlab.com/s.arlyapov/build_cpp/broker bash
+    - name: Observe containers
+      run: docker ps
+    - name: Cmake
+      run: docker exec broker bash -c "cd /root/src/ ; cmake ."
+    - name: Build
+      run: docker exec broker bash -c "cd /root/src/ ; cmake --build ."
+    - name: Start broker
+      run: docker exec -d broker bash -c "/root/src/bins/broker/broker"
+    - name: Test
+      run: docker exec broker bash -c "/root/src/tests/brokertest/brokertest"
