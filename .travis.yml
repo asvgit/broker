@@ -3,7 +3,8 @@ services:
   - docker
 before_script:
   - docker pull registry.gitlab.com/s.arlyapov/build_cpp/broker
-  - docker run -d registry.gitlab.com/s.arlyapov/build_cpp/broker bash
+  - docker run -d registry.gitlab.com/s.arlyapov/build_cpp/broker --name broker bash
 script:
-  - cmake .
-  - cmake --build .
+  - docker cp ./ broker:/root/src
+  - docker exec broker bash -c "cd /root/src/ ; cmake ."
+  # - cmake --build .
