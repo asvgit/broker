@@ -8,4 +8,5 @@ script:
   - docker ps
   - docker cp ./ broker:/root/src
   - docker exec broker bash -c "cd /root/src/ ; cmake ."
-  # - cmake --build .
+  - docker exec broker bash -c "cd /root/src/ ; cmake --build ."
+  - docker exec broker bash -c "/root/src/bins/broker/broker"
