@@ -1,0 +1,11 @@
+name: C/C++ CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: pull image
+      run: docker pull registry.gitlab.com/s.arlyapov/build_cpp/broker
+    - name: run from image
+      run: docker run -d  --name broker registry.gitlab.com/s.arlyapov/build_cpp/broker bash
