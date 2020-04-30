@@ -10,4 +10,4 @@ script:
   - docker exec broker bash -c "cd /root/src/ ; cmake ."
   - docker exec broker bash -c "cd /root/src/ ; cmake --build ."
   - docker exec -d broker bash -c "/root/src/bins/broker/broker"
-  - docker exec brocker bash -c "/root/src/tests/brokertest/brokertest"
+  - docker exec broker bash -c "/root/src/tests/brokertest/brokertest"
