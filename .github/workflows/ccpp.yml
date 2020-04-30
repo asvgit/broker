@@ -11,6 +11,8 @@ jobs:
       run: docker run -d  --name broker registry.gitlab.com/s.arlyapov/build_cpp/broker bash
     - name: Observe containers
       run: docker ps
+    - name: Copy sources
+      run: docker cp ./ broker:/root/src
     - name: Cmake
       run: docker exec broker bash -c "cd /root/src/ ; cmake ."
     - name: Build
