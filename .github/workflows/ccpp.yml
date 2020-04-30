@@ -20,4 +20,4 @@ jobs:
     - name: Start broker
       run: docker exec -d broker bash -c "/root/src/bins/broker/broker"
     - name: Test
-      run: docker exec broker bash -c "/root/src/tests/brokertest/brokertest"
+      run: docker exec broker bash -c "/root/src/tests/brokertest/brokertest --gtest_filter=-TransactionTest.*"
