@@ -20,4 +20,4 @@ jobs:
     - name: Start broker
       run: ./bins/broker/broker &
     - name: Test
-      run: ./tests/brokertest/brokertest --gtest_filter=-TransactionTest.*
+      run: ./tests/brokertest/brokertest
