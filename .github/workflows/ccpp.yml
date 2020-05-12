@@ -8,6 +8,8 @@ jobs:
         container: [registry.gitlab.com/s.arlyapov/build_cpp/broker]
     steps:
     - uses: actions/checkout@v2
+      with:
+        container: ${{ matrix.container }}
     - name: Observe container sources
       run: ls -la 
     - name: Cmake
