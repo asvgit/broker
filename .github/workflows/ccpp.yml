@@ -12,6 +12,8 @@ jobs:
       run: docker ps
     - name: Copy sources
       run: docker cp ./ broker:/root/src
+    - name: Observe container sources
+      run: docker exec broker bash -c "ls -la /root/src/"
     - name: Cmake
       run: docker exec broker bash -c "cd /root/src/ ; cmake ."
     - name: Build
