@@ -6,7 +6,7 @@ jobs:
     strategy:
       matrix:
         container: [registry.gitlab.com/s.arlyapov/build_cpp/broker]
-    container: ${{ matrix.container }}
+    container: ${{ format('registry.gitlab.com/s.arlyapov/{0}', matrix.container) }}
     steps:
     - uses: actions/checkout@v2
     - name: Observe container sources
