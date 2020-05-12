@@ -3,10 +3,9 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      DOCKER_IMAGE_REPO: registry.gitlab.com/s.arlyapov/build_cpp/broker
-    container:
-      image: ${{ DOCKER_IMAGE_REPO }}
+    strategy:
+      matrix:
+        container: [registry.gitlab.com/s.arlyapov/build_cpp/broker]
     steps:
     - uses: actions/checkout@v2
     - name: Observe container sources
