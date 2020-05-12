@@ -5,9 +5,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        container: [broker]
-        project: [build_cpp]
-    container: ${{ format('registry.gitlab.com/s.arlyapov/{0}/{1}', matrix.project, matrix.container) }}
+        os: [debian]
+        compiler: [calng,gcc]
+    container: ${{ format('registry.gitlab.com/s.arlyapov/broker_images/{0}:{1}', matrix.os, matrix.compiler) }}
     steps:
     - uses: actions/checkout@v2
     - name: Observe container sources
