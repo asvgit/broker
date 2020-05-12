@@ -6,7 +6,7 @@ jobs:
     env:
       DOCKER_IMAGE_REPO: registry.gitlab.com/s.arlyapov/build_cpp/broker
     container:
-      image: ${{ job.env.DOCKER_IMAGE_REPO }}
+      image: ${{ env.DOCKER_IMAGE_REPO }}
     steps:
     - uses: actions/checkout@v2
     - name: Observe container sources
