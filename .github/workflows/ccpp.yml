@@ -1,7 +1,5 @@
 name: C/C++ CI
 on: [push, pull_request]
-env:
-  docker_registry: registry.gitlab.com/s.arlyapov/broker_images
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,11 +8,11 @@ jobs:
       matrix:
         os: [debian, centos]
         compiler: [clang, gcc]
-    container: ${{ format('{0}/{1}:{2}', env.docker_registry, matrix.os, matrix.compiler) }}
+    container: ${{ format('registry.gitlab.com/s.arlyapov/broker_images/{1}:{2}', matrix.os, matrix.compiler) }}
     steps:
     - uses: actions/checkout@v2
-    - name: Observe container sources
-      run: ls -la 
+    - name: Add log settings
+      run: echo "<config><broker><log><level>8</level><path windows="./" _nix="./">./</path><interactive>false</interactive></log></broker></config>" > broker.xml
     - name: Cmake
       run: cmake .
     - name: Build
@@ -23,3 +21,7 @@ jobs:
       run: ./bins/broker/broker &
     - name: Test
       run: ./tests/brokertest/brokertest
+    - uses: actions/upload-artifact@v1
+      with:
+        name: broker.log
+        path: broker.log
