@@ -1,0 +1,18 @@
+FROM ubuntu:18.04
+RUN apt-get update
+RUN apt-get install -y libpoco-dev uuid-dev pkg-config unixodbc-dev libgtest-dev libssl-dev git wget curl unzip autoconf clang
+ADD https://cmake.org/files/v3.15/cmake-3.15.2-Linux-x86_64.sh /cmake-3.15.2-Linux-x86_64.sh
+RUN mkdir /opt/cmake
+RUN sh /cmake-3.15.2-Linux-x86_64.sh --prefix=/opt/cmake --skip-license
+RUN ln -s /opt/cmake/bin/cmake /usr/local/bin/cmake
+RUN cd /usr/src/gtest ; cmake CMakeLists.txt
+RUN cd /usr/src/gtest ; make -j$(nproc)
+RUN cd /usr/src/gtest ; make install
+RUN git clone https://github.com/protocolbuffers/protobuf.git
+RUN cd /protobuf ; git checkout v3.3.0
+RUN cd /protobuf ; git submodule update --init --recursive
+RUN cd /protobuf ; ./autogen.sh
+RUN cd /protobuf ; ./configure
+RUN cd /protobuf ; make -j$(nproc)
+RUN cd /protobuf ; make install
+RUN apt-get install -y protobuf-compiler

@@ -1,0 +1,4 @@
+FROM debian
+RUN apt-get update
+RUN apt install -y libpoco-dev uuid-dev pkg-config protobuf-compiler unixodbc-dev libgtest-dev libprotobuf-dev
+RUN apt install -y cmake git build-essential
