@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Add log settings
-      run: echo "<config><broker><log><level>8</level><path windows="./" _nix="./">./</path><interactive>false</interactive></log></broker></config>" > broker.xml
+      run: echo '<config><broker><log><level>8</level><path windows="./" _nix="./">./</path><interactive>false</interactive></log></broker></config>' > broker.xml
     - name: Cmake
       run: cmake .
     - name: Build
