@@ -20,9 +20,14 @@ jobs:
     - name: Start broker
       run: ./bins/broker/broker &
     - name: Test
+      id: test
       run: ./tests/brokertest/brokertest
+      continue-on-error: true
     - name: Upload log
       uses: actions/upload-artifact@v1
       with:
         name: broker.log
         path: broker.log
+    - name: Check on failures
+      if: steps.test.outputs.status == 'failure'
+      run: exit 1
