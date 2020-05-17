@@ -21,7 +21,7 @@ jobs:
       run: ./bins/broker/broker &
     - name: Test
       id: test
-      run: ./tests/brokertest/brokertest --gtest_filter=ClientAckTest.testFirstMessageAcked
+      run: ./tests/brokertest/brokertest --gtest_filter=ClientAckTest.testFirstMessageAcked && echo ::set-output name=status::success
       continue-on-error: true
     - name: Upload log
       uses: actions/upload-artifact@v1
