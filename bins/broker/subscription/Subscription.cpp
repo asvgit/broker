@@ -311,6 +311,26 @@ Subscription::ProcessMessageResult Subscription::getNextMessage() {
     size_t consumersSize = _consumers.size();
     do {
       try {
+        const size_t tid = (size_t)(Poco::Thread::currentTid());
+        log->information("DEBUG %s",
+                          std::to_string(consumer->tcpNum)
+                               .append(" * <= from subs (on storage::get) => ")
+                               .append(_name)
+                               .append(" : consumer [ tid(")
+                               .append(std::to_string(tid))
+                               .append(") ")
+                               .append(std::to_string(consumer->num))
+                               .append(":")
+                               .append(consumer->clientID)
+                               .append(":")
+                               .append((useFileLink ? "use_file_link" : "standard"))
+                               .append("] to client : ")
+                               .append(consumer->objectID)
+                               .append("[ to consumer select ")
+                               .append(std::to_string(consumer->select->size()))
+                               .append("; storage size ")
+                               .append(std::to_string(storage.size()))
+                               .append("]"));
         sMessage = storage.get(*consumer, useFileLink);
       } catch (Exception &ex) {
         consumer->select->clear();
