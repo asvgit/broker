@@ -28,10 +28,6 @@ jobs:
       with:
         name: ${{ format('{0}.{1}.log', matrix.os, matrix.compiler) }}
         path: broker.log
-    - name: Dump steps context
-      env:
-        STEPS_CONTEXT: ${{ toJson(steps) }}
-      run: echo "$STEPS_CONTEXT"
     - name: Check on failures
       if: steps.test.outputs.status != 'success'
       run: exit 1
