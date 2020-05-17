@@ -6,7 +6,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [debian, centos]
+        os: [debian, centos, ubuntu18]
         compiler: [clang, gcc]
     container: ${{ format('registry.gitlab.com/s.arlyapov/broker_images/{0}:{1}', matrix.os, matrix.compiler) }}
     steps:
