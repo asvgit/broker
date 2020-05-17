@@ -127,6 +127,8 @@ TEST_F(ClientAckTest, testLastMessageAcked) {
 
 ////////////////////////////////////////////////////////////////////////////////
 TEST_F(ClientAckTest, testFirstMessageAcked) {
+  for (int i(0); i  < 10000; ++i) {
+    std::cout << "try " << i << std::endl;
   Connection *connection = this->cmsProvider->getConnection();
   connection->start();
 
@@ -175,6 +177,7 @@ TEST_F(ClientAckTest, testFirstMessageAcked) {
   EXPECT_NO_THROW(textMessage3->acknowledge());
 
   EXPECT_NO_THROW(session->close());
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
